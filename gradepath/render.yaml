@@ -4,7 +4,7 @@ services:
     name: polaris
     runtime: python
     plan: free
-    buildCommand: pip install -r requirements.txt
+    buildCommand: cp -r "gradepath(36)/gradepath/." . && pip install -r requirements.txt
     startCommand: gunicorn app:app --workers 1 --threads 8 --timeout 60
     healthCheckPath: /healthz
     envVars:
