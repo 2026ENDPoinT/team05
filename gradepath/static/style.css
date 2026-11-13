@@ -710,3 +710,40 @@ html { scroll-behavior: smooth; }
 .adv-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px 18px; margin-top: 14px; }
 .adv-grid label { display: flex; flex-direction: column; gap: 6px; }
 @media (max-width: 640px) { .adv-grid { grid-template-columns: 1fr; } }
+
+/* ====== 내 성적 요약 압축 띠 ====== */
+.sum-strip { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 18px; margin-bottom: 16px; border: 1px solid var(--line); border-radius: 14px; background: #fff; }
+.sum-text { font-weight: 700; color: var(--navy); }
+.sum-more { display: flex; justify-content: center; margin: 22px 0 6px; }
+
+/* ====== 기말고사 이후 예상 · 철회 차단 ====== */
+.blocked { border: 1.5px solid #27355F; border-radius: 14px; padding: 20px 24px; background: #fff; }
+.blocked b { font-size: 1.125rem; color: #27355F; }
+.blocked p { margin: 8px 0 14px; color: var(--ink-soft); }
+.fin-lines { font-size: .9375rem; line-height: 1.9; margin-top: 6px; }
+.fin-lines b { color: #27355F; }
+.fin-wrap { position: relative; margin: 44px 6px 18px; }
+.fin-bar { display: flex; height: 46px; border-radius: 14px; overflow: hidden; border: 2px solid #27355F; }
+.fin-bar i { display: flex; align-items: center; justify-content: center; font-style: normal; font-size: .8125rem; font-weight: 700; color: #4A5272; background: #E4E7F1; border-left: 2px solid #fff; box-sizing: border-box; }
+.fin-bar i:first-child { border-left: none; }
+.fin-bar i.on { background: #27355F; color: #fff; }
+.fin-pin { position: absolute; top: -32px; transform: translateX(-50%); font-size: .75rem; font-weight: 700; white-space: nowrap; }
+.fin-pin::after { content: "▼"; display: block; text-align: center; font-size: .6875rem; }
+
+/* 목표 시뮬레이션 요약 문장·경계선 */
+.sim-sum { margin: 10px 0 6px; padding: 12px 16px; border-radius: 12px; background: #27355F; color: #fff; font-weight: 700; }
+.sim-sum b { color: #FFE9A8; }
+tr.sim-edge td { border-bottom: 3px solid #27355F; }
+.f-actions-end { grid-column: 1 / -1; margin-top: 4px; }
+
+/* 탭 전환 0.1초 + 어색한 줄바꿈 자동 조정 */
+.tab:not([hidden]) { animation: tabin .1s ease-out; }
+@keyframes tabin { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .tab:not([hidden]) { animation: none; } }
+body { word-break: keep-all; overflow-wrap: break-word; line-break: strict; }
+h1, h2, h3, .section-title, .sub-title, .klabel, .xc-title, .wd-sub, .sim-sum, .modenote, .hint, .callout, .knote, .semhint, .dim, label, small {
+  text-wrap: pretty; }
+h1, h2, h3, .section-title, .sub-title, .klabel, .xc-title { text-wrap: balance; }
+.btn, .btn-ghost, .btn-link, .chip, .tag, .gtag, .wd-tag, .term, .help { white-space: nowrap; }
+input, select, textarea { word-break: normal; }
+.scroll th, .scroll td { word-break: keep-all; }
