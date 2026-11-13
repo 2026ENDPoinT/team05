@@ -255,15 +255,26 @@ function renderMode() {
   $("midSec").hidden = fin;
   $("wdBlocked").hidden = !fin;
   $("wdMain").hidden = fin;
+  $("uFinScore").disabled = !fin;                  // 기말고사 점수는 기말고사 이후 시점에서만 입력
+  $("uFinScore").placeholder = fin ? "예: 35" : "기말고사 이후에 입력";
   if (fin) renderFinalSelect();
 }
 
 async function setMode(m) {
-  await api("PUT", "/api/mode", { mode: m });
-  await loadAll();
+  if (m === S.settings.mode) return;
+  const prev = S.settings.mode;
+  S.settings.mode = m;                              // 서버 응답을 기다리지 않고 화면부터 바꿈
+  renderMode();
   $("predictResult").innerHTML = "";
   $("withdrawResult").innerHTML = "";
   $("retakeResult").innerHTML = "";
+  try {
+    await api("PUT", "/api/mode", { mode: m });
+  } catch (err) {                                   // 저장에 실패하면 이전 시점으로 되돌림
+    S.settings.mode = prev;
+    renderMode();
+    return;
+  }
   if (lastRetake) { if (currentTab === "retake") runRetake(lastRetake.source, lastRetake.id); else lastRetake = null; }
 }
 $("modeSwitch").addEventListener("click", (e) => {
@@ -310,10 +321,10 @@ $("goSettings").addEventListener("click", () => showTab("settings"));
 /* ---------- 불러오기 ---------- */
 
 async function loadAll() {
-  S = await api("GET", "/api/state");
-  const sum = await api("GET", "/api/summary");
+  const [state, sum, cands] = await Promise.all([api("GET", "/api/state"), api("GET", "/api/summary"), api("GET", "/api/retake/candidates")]);   // 세 요청을 동시에 보냄
+  S = state;
   SUM = sum;
-  CANDS = (await api("GET", "/api/retake/candidates")).candidates;
+  CANDS = cands.candidates;
   renderMode();
   renderSetupNotice();
   renderSummary(sum);
@@ -595,7 +606,7 @@ function resetCurrentForm() {
   editU = null;
   $("uSubmit").textContent = "과목 등록";
   $("uCancel").hidden = true;
-  for (const id of ["uName", "uScore", "uMax", "uMean", "uStd", "uExamRatio", "uFinRatio", "uFinMax"]) $(id).value = "";
+  for (const id of ["uName", "uScore", "uMax", "uMean", "uStd", "uExamRatio", "uFinRatio", "uFinMax", "uFinScore"]) $(id).value = "";
   $("uCredit").value = 3;
   $("uMajor").checked = false;
   $("uRequired").checked = false;
@@ -652,7 +663,11 @@ $("uFinRatio").addEventListener("input", updateRatioSum);
 function evalText(c) {
   if (c.exam_ratio === undefined) return "중간고사만";
   const parts = [`중간 ${c.exam_ratio}%`];
-  if (c.fin_ratio !== undefined) parts.push(`기말 ${c.fin_ratio}% (점수 미정${c.fin_max ? ", 만점 " + c.fin_max : ""})`);
+  if (c.fin_ratio !== undefined) {
+    const fmax = c.fin_max || 100;
+    parts.push(c.fin_score !== undefined ? `기말 ${Math.round(c.fin_score * fmax) / 100}${c.fin_max ? "/" + c.fin_max : ""}점 ${c.fin_ratio}%`
+      : `기말 ${c.fin_ratio}% (점수 미정${c.fin_max ? ", 만점 " + c.fin_max : ""})`);
+  }
   for (const it of c.items || []) parts.push(`${it.name} ${it.score}${it.max ? "/" + it.max : ""}점 ${it.ratio}%`);
   return parts.join(" · ");
 }
@@ -698,6 +713,7 @@ function startEditCurrent(c) {
   $("uExamRatio").value = c.exam_ratio ?? "";
   $("uFinRatio").value = c.fin_ratio ?? "";
   $("uFinMax").value = c.fin_max ?? "";
+  $("uFinScore").value = c.fin_score === undefined ? "" : Math.round(c.fin_score * (c.fin_max || 100)) / 100;
   $("uItems").innerHTML = "";
   for (const it of c.items || []) addItemRow(it);
   applyMax();
@@ -730,7 +746,7 @@ $("currentForm").addEventListener("submit", async (e) => {
   };
   if ($("uUseExtra").checked) {
     body.exam_ratio = $("uExamRatio").value;
-    if ($("uFinRatio").value) { body.fin_ratio = $("uFinRatio").value; body.fin_max = $("uFinMax").value; }
+    if ($("uFinRatio").value) { body.fin_ratio = $("uFinRatio").value; body.fin_max = $("uFinMax").value; if ($("uFinScore").value.trim() !== "") body.fin_score = $("uFinScore").value; }
     body.items = readItems().filter((i) => i.name || i.score || i.ratio);
   }
   try {
@@ -740,7 +756,7 @@ $("currentForm").addEventListener("submit", async (e) => {
     await loadAll();
   } catch (err) {
     warnErr("uMsg", err, { "과목명": $("uName"), "학점": $("uCredit"), "중간고사 점수": $("uScore"), "평균": $("uMean"), "표준편차": $("uStd"),
-      "중간고사 반영 비율": $("uExamRatio"), "기말고사 반영 비율": $("uFinRatio"), "중간고사 만점": $("uMax"), "기말고사 총점": $("uFinMax") });
+      "중간고사 반영 비율": $("uExamRatio"), "기말고사 반영 비율": $("uFinRatio"), "중간고사 만점": $("uMax"), "기말고사 총점": $("uFinMax"), "기말고사 점수": $("uFinScore") });
   }
 });
 
@@ -1245,7 +1261,7 @@ function paintSem() {
   $("sSemNote").textContent = `${semYear}학년 ${semTerm}학기 → 현 학기 이후 정규 학기 ${left}개 남음 (8학기 졸업 기준` + (extraN ? ` + 추가 ${extraN}학기)` : ")");
   $("sExtraOn").checked = extraN > 0 || !$("sExtra").hidden;
   $("sExtra").hidden = !$("sExtraOn").checked;
-  for (const b of $("sExtra").children) b.classList.toggle("on", +b.dataset.v === extraN);
+  if (extraN > 0) $("sExtra").value = String(extraN);
 }
 $("sYear").addEventListener("click", (e) => { const b = e.target.closest("button"); if (b) { semYear = +b.dataset.v; semTouched = true; paintSem(); } });
 $("sTerm").addEventListener("click", (e) => { const b = e.target.closest("button"); if (b) { semTerm = +b.dataset.v; semTouched = true; paintSem(); } });
@@ -1327,7 +1343,7 @@ async function renderGuide() {
           renderGuide();
         });
         return el("label", { class: "check" + (f.kind !== "future" ? " off" : "") }, cb,
-          `${f.term}학기` + (f.kind === "past" ? " (이수 완료)" : f.kind === "now" ? " (현 학기)" : ""));
+          termLabel(f.year, f.term) + (f.kind === "past" ? " (이수 완료)" : f.kind === "now" ? " (현 학기)" : ""));
       })));
     bz.append(el("div", { class: "opt-title" }, "학업 부담 조정 학기 (선택한 학기의 수강 학점을 줄입니다)"),
       el("div", { class: "hint" }, "향후 학기 중 학업 부담을 조정할 학기를 선택할 수 있습니다. 이전 학기와 현 학기는 변경할 수 없습니다."),
@@ -1471,27 +1487,17 @@ $("goMid").addEventListener("click", () => setMode("mid"));
 function renderFinalSelect() {
   const sel = $("fCourse"), prev = sel.value;
   fillSelect(sel, S.current.length ? S.current.map((c) => [c.id, `${c.name} (${c.credit}학점)`]) : [["", "현 학기 과목이 없습니다"]], prev);
-  fillFinalDefaults();
 }
-function fillFinalDefaults() {
-  const c = S.current.find((x) => String(x.id) === String($("fCourse").value));
-  const abs = c && c.grading === "absolute";
-  $("fMeanBox").hidden = $("fStdBox").hidden = !!abs;
-  if (c && !abs) { if (!$("fMean").value) $("fMean").value = c.mean; if (!$("fStd").value) $("fStd").value = c.std; }
-}
-$("fCourse").addEventListener("change", () => { $("fMean").value = ""; $("fStd").value = ""; fillFinalDefaults(); $("fResult").innerHTML = ""; });
+$("fCourse").addEventListener("change", () => { say("fMsg", ""); $("fResult").innerHTML = ""; });
 
 $("fBtn").addEventListener("click", async () => {
   say("fMsg", "");
   $("fResult").innerHTML = "";
   if (!$("fCourse").value) { warn("fMsg", "현 학기 교과목을 먼저 등록해 주세요.", null); return; }
-  const abs = $("fMeanBox").hidden;
-  const prob = firstProblem([[$("fTotal"), "최종 총점"], ...(abs ? [] : [[$("fMean"), "수강생 평균"], [$("fStd"), "표준편차"]])]);
-  if (prob) { warn("fMsg", prob[1], prob[0]); return; }
   try {
-    const r = await api("POST", "/api/final-estimate", { course_id: $("fCourse").value, final_total: $("fTotal").value, mean: $("fMean").value, std: $("fStd").value });
+    const r = await api("POST", "/api/final-estimate", { course_id: $("fCourse").value });
     renderFinalResult(r);
-  } catch (err) { warnErr("fMsg", err, { "최종 총점": $("fTotal"), "수강생 평균": $("fMean"), "표준편차": $("fStd") }); }
+  } catch (err) { warnErr("fMsg", err, {}); }
 });
 
 function renderFinalResult(r) {
@@ -1528,11 +1534,13 @@ function renderFinalResult(r) {
     el("button", { type: "button", class: "btn-ghost", onclick: () => showTab("grades") }, "확정 성적 등록하러 가기")));
 }
 
+for (let n = 1; n <= 10; n++) $("sExtra").append(el("option", { value: String(n) }, `${n}학기`));   // 입학년도 선택창처럼 목록에서 고름 (최대 10학기)
 $("sExtraOn").addEventListener("change", () => {
-  if ($("sExtraOn").checked) { extraN = extraN || 1; $("sExtra").hidden = false; } else { extraN = 0; $("sExtra").hidden = true; }
+  if ($("sExtraOn").checked) { extraN = extraN || 1; $("sExtra").hidden = false; $("sExtra").value = String(extraN); } else { extraN = 0; $("sExtra").hidden = true; }
   semTouched = true; paintSem();
 });
-$("sExtra").addEventListener("click", (e) => { const b = e.target.closest("button"); if (b) { extraN = +b.dataset.v; semTouched = true; paintSem(); } });
+$("sExtra").addEventListener("change", () => { extraN = +$("sExtra").value; semTouched = true; paintSem(); });
 
 function semYearLabel(y) { return y > 4 ? "추가학기" : `${y}학년`; }
 function semLabel(y, t) { return y > 4 ? `추가 ${(y - 5) * 2 + t}학기` : `${y}학년 ${t}학기`; }
+function termLabel(y, t) { return y > 4 ? `추가 ${(y - 5) * 2 + t}학기` : `${t}학기`; }
