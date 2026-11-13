@@ -3,7 +3,7 @@
 
 const $ = (id) => document.getElementById(id);
 let S = null;          // 서버에서 받아 온 전체 상태
-let SUM = null;        // 요약(누적 평균 학점, 학기별 평균 평점 등)
+let SUM = null;        // 요약(누적 평균 평점, 학기별 평균 평점 등)
 let CANDS = [];        // 재수강 후보 목록
 let editC = null;      // 수정 중인 지난 학기 과목 id
 let editU = null;      // 수정 중인 현 학기 과목 id
@@ -17,14 +17,15 @@ const typeLabel = (c) => TYPE_TEXT[c.type] + (c.required ? " · 필수" : "");
 
 /* 용어 설명 (물음표 버튼에 마우스를 올리거나 누르면 보입니다) */
 const GLOSSARY = {
-  z: ["Z점수", "내 점수가 반 평균보다 표준편차 몇 개만큼 높은지(+) 낮은지(−) 나타낸 값입니다. z = (내 점수 − 평균) ÷ 표준편차. 0이면 평균, +1이면 평균보다 표준편차 1개만큼 위입니다."],
+  z: ["Z점수", "내 점수가 수강생 평균보다 표준편차 몇 개만큼 높은지(+) 낮은지(−) 나타낸 값입니다. z = (내 점수 − 평균) ÷ 표준편차. 0이면 평균, +1이면 평균보다 표준편차 1개만큼 위입니다."],
   std: ["표준편차", "점수가 평균 주변에 얼마나 흩어져 있는지를 나타내는 값입니다. 클수록 학생들 점수 차이가 큽니다."],
   top: ["예상 상위 비율", "z점수를 바탕으로, 점수가 종 모양(정규분포)으로 퍼져 있다고 가정했을 때 내가 반에서 상위 몇 %쯤인지 추정한 값입니다. 작을수록 상위입니다. 실제 등수와 다를 수 있습니다."],
   range: ["점수가 바뀌면(참고)", "현재 점수가 기말까지 표준편차의 일정 배수만큼 오르거나 내릴 수 있다고 가정했을 때의 최저~최고 학점입니다. 확정 성적이 아니며, 변동 폭은 '계산 기준'의 임의 설정값입니다."],
   maxg: ["최대 학점", "현재 점수 위치에서 교수님이 윗 등급을 최대한 많이 줄 때 받을 수 있는 학점입니다. 학칙상 A0 이상은 30% 이하, B0 이상은 70% 이하이고, 그 안에서 A+/A0, B+/B0 비율은 교수님이 정합니다. 상위 30% 이내면 A+, 30~70%면 B+, 그 아래는 C+입니다."],
   ming: ["최소 학점", "현재 점수 위치에서 구간 상한까지 등급이 채워진다고 가정할 때 최소한 받을 수 있는 학점입니다. 상위 30% 이내면 A0, 30~70%면 B0입니다. 교수님이 A를 적게 주면 이보다 낮아질 수 있습니다."],
-  need: ["목표 달성 필요 평점", "목표 누적 평균 학점을 달성하려면 현 학기 과목들의 학점 가중 평균 평점이 얼마여야 하는지입니다. 4.5를 넘으면 현 학기만으로는 달성할 수 없습니다."],
-  prob: ["목표 평점 달성 추정 가능성", "앞으로 점수가 현재 위치에서 무작위로 흔들린다고 가정하고 3000번 모의 계산했을 때, 목표 평균 학점에 도달한 비율로 정한 대략적인 가능성입니다. 실제로 검증된 확률이 아니라 가정에 따른 참고 지표입니다."],
+  delta: ["예상 평점 대비 증감", "예상 학점을 받았을 때의 누적 평균 평점과 비교해, 이 등급을 받으면 누적 평균 평점이 얼마나 오르거나 내리는지를 나타냅니다."],
+  need: ["목표 달성 필요 평점", "목표 누적 평균 평점을 달성하려면 현 학기 과목들의 학점 가중 평균 평점이 얼마여야 하는지입니다. 4.5를 넘으면 현 학기만으로는 달성할 수 없습니다."],
+  prob: ["목표 평점 달성 추정 가능성", "앞으로 점수가 현재 위치에서 무작위로 흔들린다고 가정하고 3000번 모의 계산했을 때, 목표 평균 평점에 도달한 비율로 정한 대략적인 가능성입니다. 실제로 검증된 확률이 아니라 가정에 따른 참고 지표입니다."],
   gparange: ["누적 평균 평점 예상 범위", "모의 계산 3000번 결과 중 가운데 80%(작은 쪽 10%와 큰 쪽 10%를 뺀 구간)가 들어가는 누적 평균 평점 범위입니다."],
   semgpa: ["현 학기 평균 평점", "현 학기 과목만으로 계산한 평점평균입니다."],
   cumgpa: ["누적 평균 평점", "지금까지 들은 모든 학기 과목을 합쳐서 계산한 평점평균입니다."],
@@ -188,12 +189,14 @@ function showTip(btn) {
   tip.style.left = left + "px";
   tip.style.top = r.bottom + window.scrollY + 8 + "px";
 }
-document.addEventListener("mouseover", (e) => { if (e.target.classList.contains("help")) showTip(e.target); });
-document.addEventListener("mouseout", (e) => { if (e.target.classList.contains("help")) tip.hidden = true; });
+const helpOf = (n) => { const t = n.closest && n.closest(".term"); return t ? t.querySelector(".help") : null; };
+document.addEventListener("mouseover", (e) => { const h = helpOf(e.target); if (h) showTip(h); });
+document.addEventListener("mouseout", (e) => { if (helpOf(e.target)) tip.hidden = true; });
 document.addEventListener("focusin", (e) => { if (e.target.classList.contains("help")) showTip(e.target); });
 document.addEventListener("focusout", () => { tip.hidden = true; });
 document.addEventListener("click", (e) => {
-  if (e.target.classList.contains("help")) { e.preventDefault(); showTip(e.target); }
+  const h = helpOf(e.target);
+  if (h) { e.preventDefault(); showTip(h); }
   else tip.hidden = true;
 });
 
@@ -232,8 +235,8 @@ const MODE_NOTES = {
     final: "기말고사 이후에는 철회 신청 기간이 이미 지났을 수 있습니다. 참고용 비교로만 사용하세요.",
   },
   retake: {
-    mid: "재수강은 기말고사 이후 성적이 확정된 뒤 판단하는 기능입니다. 지금은 미리 확인용으로 볼 수 있고, 현 학기 과목은 현재 점수 기준 예상 성적으로 계산합니다.",
-    final: "기말고사 이후 모드: 최종 성적을 기준으로 재수강 여부를 판단합니다.",
+    mid: "재수강 분석은 최종 성적을 기준으로 진행됩니다. 성적 확정 전에는 현 학기 평가 결과에 따른 예상 성적을 활용하여 사전 분석할 수 있습니다.",
+    final: "성적 확정 모드: 확정 성적을 기준으로 재수강에 따른 평점 변화를 분석합니다.",
   },
 };
 
@@ -247,6 +250,12 @@ function renderMode() {
   $("noteMid").textContent = MODE_NOTES.predict[m];
   $("noteWithdraw").textContent = MODE_NOTES.withdraw[m];
   $("noteRetake").textContent = MODE_NOTES.retake[m];
+  const fin = m === "final";                       // 기말고사 이후: 최종 총점으로 예상 / 수강 철회는 조회 불가
+  $("finalSec").hidden = !fin;
+  $("midSec").hidden = fin;
+  $("wdBlocked").hidden = !fin;
+  $("wdMain").hidden = fin;
+  if (fin) renderFinalSelect();
 }
 
 async function setMode(m) {
@@ -308,6 +317,7 @@ async function loadAll() {
   renderMode();
   renderSetupNotice();
   renderSummary(sum);
+  renderSumStrip(sum);
   renderCompleted();
   renderCurrent();
   renderSettings();
@@ -339,28 +349,28 @@ function renderSummary(sum) {
     delta = el("span", { class: d > 0.004 ? "kdelta up" : d < -0.004 ? "kdelta down" : "kdelta" },
       d > 0.004 ? `▲ ${d.toFixed(2)}` : d < -0.004 ? `▼ ${Math.abs(d).toFixed(2)}` : "변동 없음", " 직전 학기 평점 대비");
   }
-  const gradeParts = [{ v: grp.a, c: "k-navy", t: "A 계열", n: pct(grp.a) }, { v: grp.b, c: "k-gold", t: "B 계열", n: pct(grp.b) }, { v: grp.c, c: "k-gray", t: "C 이하", n: pct(grp.c) }];
+  const gradeParts = [{ v: grp.a, c: "k-navy", t: "A등급", n: pct(grp.a) }, { v: grp.b, c: "k-gold", t: "B등급", n: pct(grp.b) }, { v: grp.c, c: "k-gray", t: "C등급 이하", n: pct(grp.c) }];
   const cur = S.current.reduce((a, c) => a + c.credit, 0);
   const rem = Math.max(0, sum.required - sum.earned - cur);
   const earnParts = [{ v: sum.major, c: "k-navy", t: "전공", n: sum.major }, { v: sum.lib, c: "k-blue", t: "교양", n: sum.lib },
     { v: cur, c: "k-gold", t: "현 학기", n: cur }];
   box.append(
     el("div", { class: "kpi" },
-      el("div", { class: "klabel" }, "누적 평균 학점"),
+      el("div", { class: "klabel" }, "누적 평균 평점"),
       el("div", { class: "kvalue" }, f2(sum.gpa), el("small", {}, "/ 4.5"), delta),
-      el("div", { class: "knote" }, graded.length ? `평점이 있는 ${graded.length}과목의 성적 분포` : "지난 학기 성적을 입력하면 분포가 나옵니다"),
+      el("div", { class: "knote" }, graded.length ? `평점 반영 과목 ${graded.length}개의 성적 분포` : "확정 성적을 등록하면 분포가 나옵니다"),
       graded.length ? bar(gradeParts) : null, graded.length ? legend(gradeParts) : null),
     el("div", { class: "kpi" },
-      el("div", { class: "klabel" }, "취득 학점"),
+      el("div", { class: "klabel" }, "누적 취득 학점"),
       el("div", { class: "kvalue" }, sum.earned, el("small", {}, `/ ${sum.required}학점`),
-        cur > 0 ? el("span", { class: "kdelta up" }, `▲ 현 학기 +${cur} 예정`) : null),
-      el("div", { class: "knote" }, `연한 부분은 현 학기 수강 중인 학점입니다 · 등록 학점 ${sum.registered}학점`),
+        cur > 0 ? el("span", { class: "kdelta up" }, `▲ 현 학기 ${cur}학점 이수 예정`) : null),
+      el("div", { class: "knote" }, `연한 영역은 현 학기 수강 학점을 나타냅니다 · 총 수강 신청 학점 ${sum.registered}학점`),
       bar([...earnParts, { v: rem, c: "k-gray", t: "", n: "" }]), legend(earnParts)));
   const b = sum.burden;
   $("gradLine").innerHTML = "";
   $("gradLine").append(
-    "졸업까지 ", el("b", {}, b.remaining + "학점"), " 남음 (총 ", sum.required, "학점 기준) · 전공 ",
-    el("b", {}, sum.major_remaining + "학점"), " 남음 (", sum.major_required, "학점 기준)");
+    "졸업 기준 잔여 학점 ", el("b", {}, b.remaining + "학점"), " (졸업 기준 ", sum.required, "학점) · 전공 잔여 이수 학점 ",
+    el("b", {}, sum.major_remaining + "학점"), " (전공 이수 기준 ", sum.major_required, "학점)");
   renderExtraCredit(sum);
   if ($("sideProg") && sum.required) {
     const pct = Math.max(0, Math.min(100, Math.round(sum.earned / sum.required * 100)));
@@ -375,11 +385,11 @@ function renderSummary(sum) {
   if (!$("trendSection").hidden) $("trendChart").append(trendChart(tr_));
   if (b.seasonal_plan > 0) {
     $("gradLine").append(el("div", { class: "dim" },
-      `계절학기 계획 ${b.seasonal_plan}학점을 반영하면 정규 학기에 ${b.need_regular}학점이 남습니다.`));
+      `계절학기 이수 예정 학점 ${b.seasonal_plan}학점 반영 시, 정규학기 잔여 이수 학점은 ${b.need_regular}학점입니다.`));
   }
 }
 
-/* 차기 학기 최대 신청 학점: 직전 학기 평균 학점·취득 학점이 기준에 얼마나 가까운지 한눈에 */
+/* 차기 학기 최대 신청 학점: 직전 학기 평균 평점·취득 학점이 기준에 얼마나 가까운지 한눈에 */
 function renderExtraCredit(sum) {
   const box = $("extraCredit");
   box.innerHTML = "";
@@ -396,20 +406,20 @@ function renderExtraCredit(sum) {
   box.append(el("div", { class: "xc" + (x.eligible ? " ok" : "") },
     el("div", { class: "xc-head" },
       el("div", {},
-        el("div", { class: "xc-title" }, "차기 학기 최대 신청 학점"),
-        el("div", { class: "xc-sub" }, `직전 학기(${x.semester}) 기준 · 그 학기에만 적용`)),
-      el("div", { class: "xc-big" }, el("b", {}, x.next_max), "학점", x.eligible ? el("span", { class: "xc-badge" }, `+${x.extra} 추가`) : null)),
-    el("div", { class: "xc-rule" }, `평균 평점 ${x.min_gpa} 이상 + ${x.min_earned}학점 이상 취득이면 ${rule.extra}학점 더 신청할 수 있어요 (기본 ${base}학점).`),
+        el("div", { class: "xc-title" }, "차기 학기 최대 수강 가능 학점"),
+        el("div", { class: "xc-sub" }, `직전 학기(${x.semester}) 성적 기준 · 차기 학기 적용`)),
+      el("div", { class: "xc-big" }, el("b", {}, x.next_max), "학점", x.eligible ? el("span", { class: "xc-badge" }, `${x.extra}학점 추가 신청 가능`) : null)),
+    el("div", { class: "xc-rule" }, `직전 학기 평균 평점 ${x.min_gpa} 이상 및 ${x.min_earned}학점 이상 취득 시, 기본 수강 한도 ${base}학점에서 ${rule.extra}학점 추가 신청이 가능합니다.`),
     el("div", { class: "xc-meters" },
-      meter("직전 학기 평균 학점", x.gpa === null ? "-" : x.gpa.toFixed(2), (x.gpa || 0) / 4.5, x.min_gpa / 4.5, gpaOk,
-        x.gpa === null ? "P/F 과목만 있어 평균 학점이 없습니다" : gpaOk ? `기준 ${x.min_gpa} 충족` : `기준까지 ${(x.min_gpa - x.gpa).toFixed(2)} 부족`),
+      meter("직전 학기 평균 평점", x.gpa === null ? "-" : x.gpa.toFixed(2), (x.gpa || 0) / 4.5, x.min_gpa / 4.5, gpaOk,
+        x.gpa === null ? "P/F 과목만 이수하여 평균 평점이 산출되지 않습니다." : gpaOk ? "평점 기준 충족" : `기준 평점까지 ${(x.min_gpa - x.gpa).toFixed(2)} 부족`),
       meter("직전 학기 취득 학점", x.earned + "학점", x.earned / base, x.min_earned / base, crOk,
-        crOk ? `기준 ${x.min_earned}학점 충족` : `기준까지 ${x.min_earned - x.earned}학점 부족`))));
+        crOk ? "취득 학점 기준 충족" : `기준 학점까지 ${x.min_earned - x.earned}학점 부족`))));
 }
 
 function resetCompletedForm() {
   editC = null;
-  $("cSubmit").textContent = "추가";
+  $("cSubmit").textContent = "등록";
   $("cCancel").hidden = true;
   $("cName").value = "";
   setPick("");
@@ -428,7 +438,7 @@ function renderSemFilter(names) {
   if (box.hidden) return;
   const chip = (v, label) => el("button", { type: "button", class: "chip sm" + (semFilter === v ? " on" : ""), "aria-pressed": semFilter === v ? "true" : "false",
     onclick: () => { semFilter = v; renderCompleted(); } }, label);
-  box.append(el("span", { class: "chip-title inline" }, "학기별로 보기"), chip("all", "전체"), ...names.map((n) => chip(n, n)));
+  box.append(el("span", { class: "chip-title inline" }, "학기별 성적 조회"), chip("all", "전체"), ...names.map((n) => chip(n, n)));
 }
 
 function renderCompleted() {
@@ -449,10 +459,10 @@ function renderCompleted() {
     if (semFilter !== "all" && name !== semFilter) continue;
     const list = groups[name];
     const info = SUM.semesters.find((x) => x.name === name);
-    const gpaText = info.gpa === null || info.gpa === undefined ? "P/F 과목만 있어 평균 평점 없음" : `평균 평점 ${f2(info.gpa)}`;
+    const gpaText = info.gpa === null || info.gpa === undefined ? "P/F 과목만 이수하여 평균 평점이 산출되지 않음" : `평균 평점 ${f2(info.gpa)}`;
     box.append(el("div", { class: "sem-title" }, name,
-      el("span", {}, `${gpaText} · 등록 ${info.credits}학점 · 취득 ${info.earned}학점`)));
-    box.append(table(["과목명", "구분", "학점", "성적", ""],
+      el("span", {}, `${gpaText} · 수강 신청 ${info.credits}학점 · 취득 ${info.earned}학점`)));
+    box.append(table(["교과목명", "이수 구분", "학점", "취득 성적", ""],
       list.map((c) => el("tr", {},
         el("td", {}, c.name),
         el("td", { class: "num" }, el("span", { class: "tag" }, typeLabel(c))),
@@ -488,7 +498,7 @@ $("cCancel").addEventListener("click", () => { resetCompletedForm(); say("cMsg",
 $("completedForm").addEventListener("submit", async (e) => {
   e.preventDefault();
   say("cMsg", "");
-  if (!$("cPick").hidden && $("cPick").value === "") { warn("cMsg", "과목명: 목록에서 과목을 선택해 주세요.", $("cPick")); return; }
+  if (!$("cPick").hidden && $("cPick").value === "") { warn("cMsg", "교과목명: 목록에서 교과목을 선택해 주세요.", $("cPick")); return; }
   const prob = firstProblem([[$("cSemester"), "학기"], ...($("cName").hidden ? [] : [[$("cName"), "과목명"]]), [$("cCredit"), "학점"]]);
   if (prob) { warn("cMsg", prob[1], prob[0]); return; }
   const body = {
@@ -548,7 +558,7 @@ function renderImportPreview(data) {
     `읽은 과목 ${data.rows.length}개 · 새로 추가 ${fresh.length}개` + (dup ? ` · 이미 있어 제외 ${dup}개` : "") +
     (data.errors.length ? ` · 오류 ${data.errors.length}줄` : "")));
   if (data.rows.length) {
-    box.append(table(["줄", "학기", "과목명", "구분", "학점", "성적", "상태"],
+    box.append(table(["줄", "이수 학기", "교과목명", "이수 구분", "학점", "취득 성적", "상태"],
       data.rows.map((r) => el("tr", { class: r.duplicate ? "dup" : "" },
         el("td", { class: "num" }, r.line),
         el("td", {}, r.semester),
@@ -583,7 +593,7 @@ async function confirmImport() {
 
 function resetCurrentForm() {
   editU = null;
-  $("uSubmit").textContent = "추가";
+  $("uSubmit").textContent = "과목 등록";
   $("uCancel").hidden = true;
   for (const id of ["uName", "uScore", "uMax", "uMean", "uStd", "uExamRatio", "uFinRatio", "uFinMax"]) $(id).value = "";
   $("uCredit").value = 3;
@@ -655,7 +665,7 @@ function renderCurrent() {
     box.append(el("div", { class: "empty" }, "현 학기 과목을 추가해 주세요."));
     return;
   }
-  box.append(table(["과목명", "구분", "학점", "중간 점수", "평균", "표준편차", "반영 항목", "평가 방식", ""],
+  box.append(table(["교과목명", "이수 구분", "이수 학점", "중간 점수", "수강생 평균", "표준편차", "반영 항목", "성적 평가 방식", ""],
     S.current.map((c) => el("tr", {},
       el("td", {}, c.name),
       el("td", { class: "num" }, el("span", { class: "tag" }, typeLabel(c))),
@@ -826,11 +836,11 @@ function renderFinalPlan(c, fn, makePick) {
     sel.value = tg;
     const need = fn.grades.find((g) => g.grade === tg);
     box.append(el("div", { class: "sub-title plan-title" }, makePick(), " 기말고사를 몇 점 맞으면?"));
-    box.append(el("div", { class: "row target-row" }, "목표 학점", sel));
+    box.append(el("div", { class: "row target-row" }, "목표 성적", sel));
     box.append(finalBand(fn, tg, need));
     box.append(el("div", { class: "dim plan-note" }, "중간고사 정보를 바탕으로 만들어진 결과입니다. 실제 기말시험에 따라 달라질 수 있습니다."));
     box.append(cards([
-      ["지금까지 환산 점수", cur.converted === null ? "-" : cur.converted.toFixed(1), `반영된 ${cur.known_ratio}% 중 100점 만점 기준`],
+      ["현재 평가 반영 점수", cur.converted === null ? "-" : cur.converted.toFixed(1), `반영된 ${cur.known_ratio}% 중 100점 만점 기준`],
       ["지금까지 얻은 점수", cur.earned.toFixed(1), `총점 ${cur.total_ratio}점 만점 중`],
       ["기말까지 모두 맞으면", cur.max_possible.toFixed(1), `기말 ${cur.final_ratio}% 반영`],
     ]));
@@ -848,7 +858,8 @@ function renderFinalPlan(c, fn, makePick) {
         const r = await api("POST", "/api/explain", { course_id: c.id, target_grade: tg });
         if (!opened) return;                           // 불러오는 중에 닫았으면 그대로 둠
         ai.innerHTML = "";
-        ai.append(el("div", { class: "ai-tag" }, "배분안 설명"),
+        ai.append(el("div", { class: "ai-tag" }, r.source === "ai" ? "AI 기반 분석 결과 해설" : "규칙 기반 분석 결과 해설"),
+          el("div", { class: "dim" }, "분석 수치는 사전 정의된 계산 알고리즘으로 산출되며, AI는 결과에 대한 설명만 제공합니다."),
           el("ul", {}, r.text.split("\n").filter((t) => t.trim()).map((t) => el("li", {}, t.replace(/^-\s*/, "")))),
                     el("button", { class: "btn-ghost", type: "button", onclick: close }, "닫기"));
       } catch (err) { ai.innerHTML = ""; ai.append(el("div", { class: "msg" }, err.message)); }
@@ -872,9 +883,9 @@ $("predictBtn").addEventListener("click", async () => {
       el("li", {}, `입력한 점수·평균·표준편차로 반 안에서의 위치를 추정합니다.`),
       el("li", {}, `기말까지 점수가 지금보다 올라가거나 내려갈 수 있다고 보고, 그 범위를 표준편차(반 점수가 흩어진 정도)의 ${sigma}배까지로 잡았어요. 예: 표준편차가 10점이면 최대 ${(sigma * 10).toFixed(0)}점 안팎의 변동을 가정.`),
       el("li", {}, "최대 학점은 점수가 올랐을 때, 최소 학점은 내렸을 때의 학점입니다. 교수님이 학점을 가장 후하게 주는 경우를 최대로 보고, 누적 비율표(A+ 15%, A0 30%…)를 기준으로 계산합니다."),
-      el("li", {}, "차기 학기 추가 신청 학점은 현 학기 예상 평균 학점으로 판단하며, 아직 확정 성적이 아니므로 '지금 예상' 기준입니다."),
+      el("li", {}, "차기 학기 추가 신청 학점은 현 학기 예상 평균 평점으로 판단하며, 아직 확정 성적이 아니므로 '지금 예상' 기준입니다."),
       el("li", {}, S.current.some((c) => c.exam_ratio !== undefined)
-        ? "출석·과제는 반영 비율로 합산하고(반 평균·표준편차는 예시값), 기말 점수는 반영하지 않습니다."
+        ? "출석·과제는 반영 비율로 합산하고(수강생 평균·표준편차는 예시값), 기말 점수는 반영하지 않습니다."
         : "출석·과제 등 다른 평가 항목과 기말 점수는 반영하지 않습니다."))));
 
     const candIds = new Set(CANDS.filter((x) => x.source === "current").map((x) => x.id));
@@ -886,9 +897,9 @@ $("predictBtn").addEventListener("click", async () => {
           el("button", { class: "btn-link", onclick: () => goWithdraw(c.id) }, "철회 분석"),
           candIds.has(c.id) ? el("button", { class: "btn-link", onclick: () => goRetake("current", c.id) }, "재수강 분석") : null)]);
     });
-    out.append(el("div", { class: "sub-title" }, "과목별 받을 수 있는 학점 (최대 · 최소)"));
+    out.append(el("div", { class: "sub-title" }, "교과목별 받을 수 있는 성적 (최대 · 최소)"));
     out.append(el("p", { class: "hint" }, "학칙은 A0 이상 30% 이하, B0 이상 70% 이하만 정하고, A+/A0 비율은 교수님이 정합니다. 그래서 현재 위치에서 받을 수 있는 최대와 최소를 보여 줍니다."));
-    out.append(table(["과목명", "학점", term("z"), term("top"), term("maxg"), term("ming"), term("range"), ""], rows));
+    out.append(table(["교과목명", "학점", term("z"), term("top"), term("maxg"), term("ming"), term("range"), ""], rows));
 
     const planCourses = S.current.filter((c) => r.final_needed[c.id]);
     if (planCourses.length) {
@@ -898,7 +909,7 @@ $("predictBtn").addEventListener("click", async () => {
         const c = planCourses.find((x) => x.id === planPick);
         host.innerHTML = "";
         host.append(renderFinalPlan(c, r.final_needed[c.id], () => {
-          const pick = el("select", { class: "course-sel", "aria-label": "과목 선택", onchange: (e) => { planPick = e.target.value; show(); } },
+          const pick = el("select", { class: "course-sel", "aria-label": "교과목 선택", onchange: (e) => { planPick = e.target.value; show(); } },
             planCourses.map((x) => el("option", { value: x.id }, x.name)));
           pick.value = planPick;
           return pick;
@@ -909,8 +920,8 @@ $("predictBtn").addEventListener("click", async () => {
     }
     const cd = await api("GET", "/api/chart-data");
     if (cd.radar.axes.length) {
-      out.append(el("div", { class: "sub-title" }, "과목별 현재 환산 점수 vs 반 평균"));
-      out.append(el("p", { class: "hint" }, "항목별 반영 비율로 합친 지금까지의 환산 점수입니다. 반 평균은 중간고사 평균과 가정값(출석·과제 등)을 비율대로 합친 값입니다."));
+      out.append(el("div", { class: "sub-title" }, "교과목별 환산 점수 비교"));
+      out.append(el("p", { class: "hint" }, "항목별 반영 비율로 합친 지금까지의 환산 점수입니다. 수강생 평균은 중간고사 평균과 가정값(출석·과제 등)을 비율대로 합친 값입니다."));
       out.append(radarChart(cd.radar));
     }
     out.append(el("div", { class: "row dl-row" },
@@ -919,8 +930,8 @@ $("predictBtn").addEventListener("click", async () => {
       el("a", { class: "btn-link", href: "/api/chart-data?format=csv", download: "gradepath_chart_data.csv" }, "CSV")));
 
     const sc = r.scenarios;
-    out.append(el("div", { class: "sub-title" }, "현 학기 이후 평균 평점 시나리오"));
-    out.append(el("p", { class: "hint" }, "'현 학기 평균 학점'는 현 학기 과목만, '전체 누적 평균 학점'는 지난 학기까지 포함한 값입니다. 현재 누적 평균 학점(현 학기 반영 전): ", f2(r.base_gpa)));
+    out.append(el("div", { class: "sub-title" }, "현 학기 종료 후 평점 변동 시나리오"));
+    out.append(el("p", { class: "hint" }, "'현 학기 예상 평균 평점'은 현 학기 교과목만, '예상 누적 평균 평점'은 이수 완료 학기까지 포함한 값입니다. 현 학기 성적 반영 전 누적 평균 평점: ", f2(r.base_gpa)));
     const rs = r.rule_scenarios;
     out.append(table(["", term("semgpa"), term("cumgpa")], [
       tr(["현재 점수 기준 최대 (모든 과목 최대 학점)", f2(rs.max.semester_gpa), f2(rs.max.cumulative_gpa)]),
@@ -934,9 +945,9 @@ $("predictBtn").addEventListener("click", async () => {
       const cr = S.current.reduce((a, c) => a + c.credit, 0), g = sc.expected.semester_gpa;
       const okG = g !== null && g >= xr.min_prev_gpa - 1e-9, okC = cr >= xr.min_prev_earned;
       out.append(el("div", { class: "callout" }, el("b", {}, "차기 학기 추가 신청: "),
-        `현 학기 평균 학점이 ${xr.min_prev_gpa} 이상이고 ${xr.min_prev_earned}학점 이상 취득하면 차기 학기에 ${xr.extra}학점을 더 신청할 수 있습니다 (최대 ${S.settings.max_credits_per_semester + xr.extra}학점). `,
-        g === null ? "현 학기 평균 학점을 계산할 수 없습니다." : okG && okC ? `지금 예상 평균 평점 ${f2(g)} 기준으로 조건을 채웁니다.`
-          : !okG ? `지금 예상 평균 학점은 ${f2(g)}로 ${(xr.min_prev_gpa - g).toFixed(2)} 부족합니다.` : `현 학기 학점이 ${xr.min_prev_earned - cr}학점 부족합니다.`));
+        `현 학기 평균 평점이 ${xr.min_prev_gpa} 이상이고 ${xr.min_prev_earned}학점 이상 취득하면 차기 학기에 ${xr.extra}학점을 더 신청할 수 있습니다 (최대 ${S.settings.max_credits_per_semester + xr.extra}학점). `,
+        g === null ? "현 학기 평균 평점을 계산할 수 없습니다." : okG && okC ? `지금 예상 평균 평점 ${f2(g)} 기준으로 조건을 채웁니다.`
+          : !okG ? `지금 예상 평균 평점은 ${f2(g)}로 ${(xr.min_prev_gpa - g).toFixed(2)} 부족합니다.` : `현 학기 학점이 ${xr.min_prev_earned - cr}학점 부족합니다.`));
     }
     out.append(el("div", { class: "sub-title" }, `목표 누적 평균 평점 ${r.target_gpa.toFixed(2)} 달성 가능성 (모의 계산)`));
     const need = r.required_avg_point;
@@ -968,15 +979,19 @@ async function runSimulate() {
     const out = $("simResult");
     const need = r.needed_grade;
     out.append(cards([
-      [`${r.course.name} 예상 학점 기준`, f2(r.base.cumulative_gpa), `예상 ${r.expected_grade} · 현 학기 ${f2(r.base.semester_gpa)}`],
-      ["목표 누적 평균 학점", r.target_gpa.toFixed(2), "설정 탭에서 변경"],
+      ["예상 학점", r.expected_grade, `${r.course.name} · ${r.course.credit}학점 · 이때 누적 평균 ${f2(r.base.cumulative_gpa)}`],
+      ["목표 누적 평균 평점", r.target_gpa.toFixed(2), "설정 탭에서 변경"],
       ["목표 달성에 필요한 최소 등급", need || "불가능", need ? "이 과목에서 이 등급 이상 받으면 목표 달성" : "어떤 등급을 받아도 목표 미달"],
     ]));
     const okRows = r.rows.filter((x) => x.meets_target && x.semester_gpa !== null);
-    if (okRows.length) out.append(el("p", { class: "hint" }, `현 학기 목표: 목표 누적 평균 ${r.target_gpa.toFixed(2)}를 이루려면 현 학기 평균 학점이 약 `, el("b", {}, f2(Math.min(...okRows.map((x) => x.semester_gpa)))), " 이상이어야 합니다."));
+    const allOk = r.rows.every((x) => x.meets_target), noneOk = !okRows.length;
+    out.append(el("div", { class: "sim-sum" },
+      noneOk ? `${r.course.name}에서 어떤 학점을 받아도 목표 ${r.target_gpa.toFixed(2)}에는 닿지 않습니다.`
+        : allOk ? `${r.course.name}에서 어떤 학점을 받아도 목표 ${r.target_gpa.toFixed(2)}를 이룰 수 있는 상태입니다.`
+        : [`${r.course.name}에서 `, el("b", {}, `${need} 이상`), `을 받으면 목표 ${r.target_gpa.toFixed(2)}를 이룹니다. (지금 예상 ${r.expected_grade})`]));
     out.append(el("p", { class: "hint" }, "다른 과목은 현재 점수 기준 예상 학점으로 고정한 값입니다. 확정 성적이 아닙니다."));
-    out.append(table(["취득 성적 등급", "현 학기 평균 학점", "누적 평균 학점", "예상 평점 대비 증감", "목표"],
-      r.rows.map((x) => el("tr", { class: x.is_expected ? "picked" : "" },
+    out.append(table(["취득 성적 등급", "현 학기 예상 평균 평점", "예상 누적 평균 평점", term("delta"), "목표 달성 여부"],
+      r.rows.map((x) => el("tr", { class: (x.is_expected ? "picked " : "") + (x.meets_target && !(r.rows[r.rows.indexOf(x) + 1] || { meets_target: true }).meets_target ? "sim-edge" : "") },
         el("td", {}, x.grade + (x.is_expected ? " (예상)" : "")),
         el("td", { class: "num" }, f2(x.semester_gpa)),
         el("td", { class: "num" }, f2(x.cumulative_gpa)),
@@ -1006,7 +1021,7 @@ function renderWithdrawSelect() {
       onclick: () => { wPick = c.id; renderWithdrawSelect(); } },
       el("b", {}, c.name), el("span", {}, `${c.credit}학점 · ${typeLabel(c)}`)));
   }
-  if (currentTab === "withdraw") runWithdraw();
+  if (currentTab === "withdraw" && S.settings.mode !== "final") runWithdraw();
 }
 
 function burdenParts(b) {
@@ -1020,6 +1035,7 @@ function goWithdraw(id) {
 }
 
 async function runWithdraw() {
+  if (S.settings.mode === "final") return;
   say("wMsg", "");
   $("withdrawResult").innerHTML = "";
   if (!wPick) return;
@@ -1041,7 +1057,7 @@ async function runWithdraw() {
     const box = (title, grade, gpa, d) => el("div", { class: "wd-box" }, el("div", { class: "wd-bt" }, `${title} (${grade})`),
       el("div", { class: "wd-bn" }, f2(gpa)), el("div", { class: "wd-bd " + (d < -0.005 ? "dn" : "up") }, noBase ? "비교할 다른 성적 없음" : (d < -0.005 ? "▼ " : d > 0.005 ? "▲ " : "") + sv(d)));
     out.append(el("div", { class: "wd-sec" }, "1. 끝까지 들었을 때", el("span", { class: "wd-tag" }, noBase ? "다른 성적이 없어 평균 변화는 비교할 수 없습니다" : `이 과목을 뺀 누적 평균 ${f2(base)} 기준`)));
-    out.append(el("div", { class: "wd-hint" }, "철회하지 않고 기말까지 가면 누적 평균 학점이 이렇게 됩니다."));
+    out.append(el("div", { class: "wd-hint" }, "철회하지 않고 기말까지 가면 누적 평균 평점이 이렇게 됩니다."));
     out.append(el("div", { class: "wd-two" }, box("현재 점수대로 끝나면", e.expected, x.stay.gpa, cE), box("기말이 부진하면", e.worst, w.stay.gpa, cW)));
     const rec = noBase ? ["다른 성적이 없어 평균 변화는 비교할 수 없습니다.", "철회하면 이 과목 학점이 취득되지 않아 졸업이 늦어질 수 있습니다."]
       : cE < -0.005 ? ["현재 점수대로 끝나도 평균이 내려갑니다. 철회를 추천합니다.", "취득 학점 손실과 졸업 지연도 아래에서 함께 확인하세요."]
@@ -1061,7 +1077,7 @@ async function runWithdraw() {
       sub ? el("div", { class: "wd-ss" }, sub) : null);
     out.append(el("div", { class: "wd-cap" }, "각 칸의 숫자는 ‘끝까지 들었을 때 → 철회했을 때’ 순서입니다."));
     out.append(el("div", { class: "wd-stats" },
-      st("누적 평균 학점", f2(x.stay.gpa), f2(x.withdraw.gpa), null, "현재 점수대로 끝나는 경우 기준"),
+      st("누적 평균 평점", f2(x.stay.gpa), f2(x.withdraw.gpa), null, "현재 점수대로 끝나는 경우 기준"),
       st("현 학기 후 취득 학점", x.stay.earned, x.withdraw.earned, (dCr > 0 ? "+" : "") + dCr,
         `전공 ${x.stay.earned_major} → ${x.withdraw.earned_major} · 교양 ${x.stay.earned_lib} → ${x.withdraw.earned_lib}`),
       st("졸업까지 남은 학점", x.stay.burden.remaining, x.withdraw.burden.remaining, "+" + (x.withdraw.burden.remaining - x.stay.burden.remaining),
@@ -1106,7 +1122,7 @@ function renderRetakeList() {
     box.append(el("div", { class: "empty" }, `재수강 대상 교과목이 없습니다. (재수강 가능 기준: ${S.settings.retake_max_prior} 이하)`));
     return;
   }
-  for (const [src, title] of [["completed", "지난 학기 성적"], ["current", "현 학기 (현재 점수 기준 예상 성적)"]]) {
+  for (const [src, title] of [["completed", "이수 완료 학기 성적"], ["current", "현 학기 (현재 점수 기준 예상 성적)"]]) {
     const list = CANDS.filter((c) => c.source === src);
     if (!list.length) continue;
     box.append(el("div", { class: "chip-title" }, title),
@@ -1130,7 +1146,7 @@ function ensureRetake() {
   else renderRetakeList();
 }
 
-/* 재수강 결과: 재수강 취득 성적별 막대 (가운데 선이 지금 누적 평균 학점) */
+/* 재수강 결과: 재수강 취득 성적별 막대 (가운데 선이 지금 누적 평균 평점) */
 function retakeView(r) {
   const EPS = 0.0049;
   const rows = [];                                    // 상한 때문에 같은 반영 성적이 되는 줄은 "A+ · A0"로 합침
@@ -1182,25 +1198,23 @@ async function runRetake(source, id) {
   renderRetakeList();
   try {
     const r = await api("POST", "/api/retake", {
-      source, course_id: id, other_credits: $("rOtherCredits").value, other_avg_point: $("rOtherAvg").value,
+      source, course_id: id,
     });
     if (my !== retakeSeq) return;
     const out = $("retakeResult");
     out.innerHTML = "";
     out.append(el("div", { class: "sub-title" },
       `${r.course.name} (${r.course.credit}학점, 기존 ${r.course.grade}${source === "current" ? " · 현 학기 예상" : ""})`));
-    const oc = parseFloat($("rOtherCredits").value);
-    if (oc > 0) out.append(el("div", { class: "opt-applied" }, `✓ 옵션 반영 중: 함께 듣는 다른 과목 ${oc}학점 · 예상 평균 ${$("rOtherAvg").value || "0"} (아래 '재수강 학기 예상 평균 평점'에 적용)`));
     out.append(cards([
-      ["현재 성적 유지 시 누적 평균 학점", f2(r.base_gpa), `${r.course.name} ${r.course.grade}`],
+      ["현재 성적 유지 시 누적 평균 평점", f2(r.base_gpa), `${r.course.name} ${r.course.grade}`],
       ["재수강 시 누적 평균 평점 최대 상승폭", signed(r.max_gain), "재수강 성적 상한 적용"],
-      ["평균 학점이 오르는 최저 성적", r.break_even || "없음", "재수강에서 이 성적 이상을 취득하면 평점이 올라갑니다"],
+      ["평균 평점이 오르는 최저 성적", r.break_even || "없음", "재수강에서 이 성적 이상을 취득하면 평점이 올라갑니다"],
     ]));
-    out.append(el("div", { class: "sub-title" }, "재수강 성적별 결과"));
+    out.append(el("div", { class: "sub-title" }, "재수강 성적 등급별 분석 결과"));
     const semHead = r.other_credits > 0 ? "재수강 학기 예상 평균 평점" : "재수강 교과목 기준 예상 평점";
     out.append(retakeView(r));
     out.append(el("details", { class: "howto" }, el("summary", {}, "자세한 표 보기"),
-      table(["재수강 취득 성적", "반영 성적", semHead, "재수강 후 누적 평점 평균 학점", "누적 변화", "취득 학점 변화"],
+      table(["재수강 취득 성적", "평점 반영 성적", semHead, "재수강 후 예상 누적 평균 평점", "누적 평점 증감", "취득 학점 증감"],
         r.rows.map((x) => tr([
           x.received, x.applied + (x.capped ? " (상한)" : ""), f2(x.semester_gpa), f2(x.gpa),
           el("span", { class: "pos" }, signed(x.delta)), x.earned_delta > 0 ? "+" + x.earned_delta : x.earned_delta,
@@ -1215,23 +1229,23 @@ async function runRetake(source, id) {
   } catch (err) {
     if (my !== retakeSeq) return;
     $("retakeResult").innerHTML = "";
-    warnErr("rMsg", err, { "함께 듣는 다른 과목 학점": $("rOtherCredits"), "다른 과목 예상 평균 평점": $("rOtherAvg") });
+    warnErr("rMsg", err, {});
   }
-}
-for (const id of ["rOtherCredits", "rOtherAvg"]) {
-  $(id).addEventListener("change", () => { if (lastRetake) runRetake(lastRetake.source, lastRetake.id); });
 }
 
 /* ---------- 5. 설정 ---------- */
 
 /* 현 학기(학년·학기)를 토글로 고르면, 남은 정규 학기 수는 8학기 기준으로 자동 계산 */
-let semYear = 4, semTerm = 2, semTouched = false;
+let semYear = 4, semTerm = 2, semTouched = false, extraN = 0;
 const semIdx = () => (semYear - 1) * 2 + semTerm;
 function paintSem() {
   for (const b of $("sYear").children) b.classList.toggle("on", +b.dataset.v === semYear);
   for (const b of $("sTerm").children) b.classList.toggle("on", +b.dataset.v === semTerm);
-  const left = 8 - semIdx();
-  $("sSemNote").textContent = `${semYear}학년 ${semTerm}학기 → 현 학기 이후 정규 학기 ${left}개 남음 (8학기 졸업 기준)`;
+  const left = 8 - semIdx() + extraN;
+  $("sSemNote").textContent = `${semYear}학년 ${semTerm}학기 → 현 학기 이후 정규 학기 ${left}개 남음 (8학기 졸업 기준` + (extraN ? ` + 추가 ${extraN}학기)` : ")");
+  $("sExtraOn").checked = extraN > 0 || !$("sExtra").hidden;
+  $("sExtra").hidden = !$("sExtraOn").checked;
+  for (const b of $("sExtra").children) b.classList.toggle("on", +b.dataset.v === extraN);
 }
 $("sYear").addEventListener("click", (e) => { const b = e.target.closest("button"); if (b) { semYear = +b.dataset.v; semTouched = true; paintSem(); } });
 $("sTerm").addEventListener("click", (e) => { const b = e.target.closest("button"); if (b) { semTerm = +b.dataset.v; semTouched = true; paintSem(); } });
@@ -1242,7 +1256,8 @@ function renderSettings() {
   $("sMajor").value = s.major_credits_required;
   $("sMax").value = s.max_credits_per_semester;
   $("sMaxYear").value = s.max_credits_per_year;
-  const idx = Math.min(8, Math.max(1, 8 - s.remaining_semesters));        // 현 학기 번호 (1학년 1학기 = 1)
+  extraN = s.extra_semesters || 0;
+  const idx = Math.min(8, Math.max(1, 8 - (s.remaining_semesters - extraN)));        // 현 학기 번호 (1학년 1학기 = 1)
   semYear = Math.ceil(idx / 2);
   semTerm = idx % 2 === 1 ? 1 : 2;
   semTouched = false;
@@ -1265,7 +1280,7 @@ $("settingsForm").addEventListener("submit", async (e) => {
   try {
     await api("PUT", "/api/settings", {
       total_credits_required: $("sTotal").value, major_credits_required: $("sMajor").value, max_credits_per_semester: $("sMax").value, max_credits_per_year: $("sMaxYear").value,
-      remaining_semesters: semTouched || S.settings.remaining_semesters <= 7 ? 8 - semIdx() : S.settings.remaining_semesters, seasonal_plan_credits: $("sSeasonal").value, target_gpa: $("sTarget").value,
+      remaining_semesters: 8 - semIdx() + extraN, extra_semesters: extraN, seasonal_plan_credits: $("sSeasonal").value, target_gpa: $("sTarget").value,
       retake_cap: $("sCap").value, retake_max_prior: $("sPrior").value,
     });
     say("sMsg", "저장했습니다.");
@@ -1297,11 +1312,11 @@ async function renderGuide() {
   const bz = $("guideBusy"), pl = $("guidePlans"), t = $("guideTable"), ai = $("guideAi");
   bz.innerHTML = ""; pl.innerHTML = ""; t.innerHTML = ""; ai.innerHTML = "";
   if (g.plans.length === 0) {
-    t.append(el("div", { class: "empty" }, "남은 정규 학기가 없습니다. (설정의 '현 학기'가 4학년 2학기면 남은 학기는 0개입니다.)"));
+    t.append(el("div", { class: "empty" }, "설정된 학사 일정상 잔여 정규학기가 없습니다. (현 학기가 4학년 2학기인 경우 잔여 정규학기는 0학기입니다.)"));
   } else {
     // 바쁜 학기 선택: 1학년 1학기부터 전부 보여 주고, 지난 학기·현 학기는 바꿀 수 없게 흐리게 표시
     const years = [...new Set(g.timeline.map((f) => f.year))];
-    const boxes = years.map((y) => el("div", { class: "busy-year" }, el("b", {}, `${y}학년`),
+    const boxes = years.map((y) => el("div", { class: "busy-year" }, el("b", {}, semYearLabel(y)),
       g.timeline.filter((f) => f.year === y).map((f) => {
         const cb = el("input", { type: "checkbox", "data-idx": f.idx });
         cb.checked = g.busy.includes(f.idx);
@@ -1327,23 +1342,23 @@ async function renderGuide() {
         el("button", { type: "button", class: x.key === guidePlan ? "on" : "", onclick: () => { guidePlan = x.key; renderGuide(); } },
           x.name + (x.key === g.default_plan ? " (권장)" : "")))));
       pl.append(el("div", { class: "hint plan-help" },
-        { even: "잔여 학점을 학기별로 균등하게 배분합니다.", balanced: "학업 부담 조정 학기의 이수 학점을 줄이고, 나머지 학기에 분산 배분합니다.", minimal: "바쁜 학기를 졸업에 꼭 필요한 최소 학점으로 줄입니다. 나머지 학기가 가장 빡빡해집니다." }[guidePlan]));
+        { even: "잔여 학점을 학기별로 균등하게 배분합니다.", balanced: "학업 부담 조정 학기의 이수 학점을 줄이고, 나머지 학기에 분산 배분합니다.", minimal: "학업 부담 조정 학기의 이수 학점을 최소화하고, 잔여 학점을 다른 학기에 집중 배분합니다." }[guidePlan]));
     }
     const note = (tagText, text, now) => el("span", {}, el("span", { class: "gtag" + (now ? " now" : "") }, tagText), text);
     const grow = (cls, cells) => el("tr", { class: cls }, cells.map((c, i) => el("td", { class: i >= 1 && i <= 3 ? "num" : "" }, c)));
     const gRows = [
-      ...g.past.map((r) => grow("g-past", [`${r.year}학년 ${r.term}학기`, r.entered ? r.credits : "-", r.entered ? r.major : "-", r.entered ? r.lib : "-",
-        note("이수 완료", r.entered ? `입력한 성적(${r.semester}) 취득 학점` : "등록된 성적 정보 없음")])),
-      ...cur.rows.map((r) => grow(r.kind === "now" ? "g-now" : "", [`${r.year}학년 ${r.term}학기` + (r.kind === "now" ? " (현 학기)" : ""), r.credits, r.major, r.lib,
+      ...g.past.map((r) => grow("g-past", [semLabel(r.year, r.term), r.entered ? r.credits : "-", r.entered ? r.major : "-", r.entered ? r.lib : "-",
+        note("이수 완료", r.entered ? `${r.semester} 확정 취득 학점` : "등록된 성적 정보 없음")])),
+      ...cur.rows.map((r) => grow(r.kind === "now" ? "g-now" : "", [semLabel(r.year, r.term) + (r.kind === "now" ? " (현 학기)" : ""), r.credits, r.major, r.lib,
         r.kind === "now" ? note("현 학기", `등록 교과목 ${S.current.length}개 기준`, true) : note("향후 학기", " 권장 이수 학점" + (r.busy ? " (학업 부담 조정 학기)" : r.cap && r.credits >= r.cap ? " (학기별 수강 학점 상한)" : ""))])),
     ];
-    if (g.seasonal_plan > 0) gRows.push(grow("g-seas", ["계절학기 이수 계획 (하계·동계 합산)", g.seasonal_plan, "-", "-", note("계절학기", "설정에 입력한 계획 학점 · 정규 학기 권장 이수 학점에서 이미 뺀 값")]));
-    for (const se of g.seasonal_entered) gRows.push(grow("g-past", [se.semester.replace(/(여름|겨울)학기/, "$1 계절학기"), se.credits, "-", "-", note(/여름/.test(se.semester) ? "여름 계절학기" : /겨울/.test(se.semester) ? "겨울 계절학기" : "지난 계절학기", "입력한 성적 (위 취득 학점 합계에는 포함)")]));
+    if (g.seasonal_plan > 0) gRows.push(grow("g-seas", ["계절학기 이수 계획 (하계·동계 합산)", g.seasonal_plan, "-", "-", note("계절학기", "계절학기 이수 예정 학점 · 정규학기 권장 이수 학점 산정 시 차감 반영")]));
+    for (const se of g.seasonal_entered) gRows.push(grow("g-past", [se.semester.replace(/여름학기/, "하계 계절학기").replace(/겨울학기/, "동계 계절학기"), se.credits, "-", "-", note(/여름/.test(se.semester) ? "하계 계절학기" : /겨울/.test(se.semester) ? "동계 계절학기" : "이수 완료 계절학기", "확정 취득 학점 (누적 취득 학점에 반영)")]));
     t.append(el("div", { class: "scroll" }, el("table", { class: "grid-table" },
       el("thead", {}, el("tr", {}, ["이수 학기", "이수 학점", "전공 학점", "교양 및 기타 학점", "학점 산정 기준"].map((h, i) => el("th", { class: i >= 1 && i <= 3 ? "num" : "" }, h)))),
       el("tbody", {}, gRows))));
     const futSum = cur.rows.filter((r) => r.kind === "future").reduce((a, r) => a + r.credits, 0), tt = g.progress.total;
-    t.append(el("div", { class: "hint g-sum" }, `졸업 기준 학점 충족 현황: 누적 취득 ${tt.done} + 현 학기 예상 ${tt.now} + 향후 학기 권장 ${futSum}` + (g.seasonal_plan > 0 ? ` + 계절학기 계획 ${g.seasonal_plan}` : "") +
+    t.append(el("div", { class: "hint g-sum" }, `졸업 기준 학점 충족 현황: 누적 취득 ${tt.done} + 현 학기 예상 ${tt.now} + 향후 학기 권장 ${futSum}` + (g.seasonal_plan > 0 ? ` + 계절학기 이수 예정 ${g.seasonal_plan}` : "") +
       ` = ${tt.done + tt.now + futSum + g.seasonal_plan}학점 (졸업 기준 ${tt.required}학점)`));
     t.append(el("div", { class: "callout" }, cur.summary));
 
@@ -1359,7 +1374,8 @@ async function renderGuide() {
         const r = await api("POST", "/api/explain-guide", { busy: g.busy });
         if (!opened) return;
         box.innerHTML = "";
-        box.append(el("div", { class: "ai-tag" }, "배분안 설명"),
+        box.append(el("div", { class: "ai-tag" }, r.source === "ai" ? "AI 기반 분석 결과 해설" : "규칙 기반 분석 결과 해설"),
+          el("div", { class: "dim" }, "분석 수치는 사전 정의된 계산 알고리즘으로 산출되며, AI는 결과에 대한 설명만 제공합니다."),
           el("ul", {}, r.text.split("\n").filter((x) => x.trim()).map((x) => el("li", {}, x.replace(/^-\s*/, "")))),
                     el("button", { class: "btn-ghost", type: "button", onclick: close }, "닫기"));
       } catch (err) { box.innerHTML = ""; box.append(el("div", { class: "msg" }, err.message)); }
@@ -1370,7 +1386,7 @@ async function renderGuide() {
   n.innerHTML = "";
   n.append(el("div", { class: "callout" },
     `졸업 이수 부담도: ${g.burden_label}` + (g.extra_semesters > 0 ? ` · 현재 이수 계획 기준, 졸업 요건 충족까지 정규학기 ${g.extra_semesters}학기의 추가 이수가 필요합니다.` : ""),
-    g.seasonal_plan > 0 ? el("div", { class: "dim" }, `계절학기 계획 ${g.seasonal_plan}학점을 반영해 정규 학기 권장 이수 학점을 줄였습니다.`) : null));
+    g.seasonal_plan > 0 ? el("div", { class: "dim" }, `계절학기 이수 예정 ${g.seasonal_plan}학점을 반영하여 정규학기 권장 이수 학점을 조정했습니다.`) : null));
 }
 $("goWithdraw").addEventListener("click", () => showTab("withdraw"));
 $("goRetake").addEventListener("click", () => showTab("retake"));
@@ -1385,7 +1401,7 @@ function setPick(name) {
 }
 function initCoursePick() {
   const sel = $("cPick");
-  sel.append(el("option", { value: "" }, "과목 선택"));
+  sel.append(el("option", { value: "" }, "교과목 선택"));
   for (const t of ["교양필수", "전공필수", "전공선택"]) {
     const g = el("optgroup", { label: t });
     for (const c of COURSES.filter((x) => x.t === t)) g.append(el("option", { value: c.n }, `${c.n} (${c.c}학점)`));
@@ -1424,3 +1440,99 @@ document.querySelector(".crumb-root").addEventListener("click", () => showTab("g
     try { localStorage.setItem("polarisProfile", JSON.stringify({ univ: $("sUniv").value, dept: $("sDept").value, entry: $("sEntry").value })); } catch (e) {}
   });
 })();
+
+/* 내 성적 위쪽 요약: 처음엔 한 줄 띠로 줄여 두고, '요약 보기'를 누르면 맨 위로 올라가며 펼침 */
+let sumOpen = null;
+function setSumOpen(open, scroll) {
+  sumOpen = open;
+  $("sumBody").hidden = !open;
+  $("sumToggle").textContent = open ? "접기" : "자세히 보기";
+  $("sumToggle").setAttribute("aria-expanded", open ? "true" : "false");
+  if (scroll) window.scrollTo({ top: 0, behavior: "smooth" });
+}
+function renderSumStrip(sum) {
+  const has = S.completed.length > 0;
+  if (sumOpen === null) sumOpen = false;                     // 처음엔 항상 압축 (성적이 이미 있어도 '요약 보기'로 펼침)
+  $("sumText").textContent = has
+    ? `누적 평균 평점 ${f2(sum.gpa)} · 취득 ${sum.earned}학점 · 졸업 기준 ${sum.required}학점`
+    : "성적을 등록하면 요약이 표시됩니다.";
+  $("sumToggle").hidden = !has;
+  $("sumMore").hidden = !has;
+  if (!has) sumOpen = false;
+  $("sumBody").hidden = !sumOpen;
+  $("sumToggle").textContent = sumOpen ? "접기" : "자세히 보기";
+}
+$("sumToggle").addEventListener("click", () => setSumOpen(!sumOpen, false));
+$("sumBtn").addEventListener("click", () => setSumOpen(true, true));
+
+$("goMid").addEventListener("click", () => setMode("mid"));
+
+/* ---------- 기말고사 이후: 최종 총점으로 예상 학점 ---------- */
+function renderFinalSelect() {
+  const sel = $("fCourse"), prev = sel.value;
+  fillSelect(sel, S.current.length ? S.current.map((c) => [c.id, `${c.name} (${c.credit}학점)`]) : [["", "현 학기 과목이 없습니다"]], prev);
+  fillFinalDefaults();
+}
+function fillFinalDefaults() {
+  const c = S.current.find((x) => String(x.id) === String($("fCourse").value));
+  const abs = c && c.grading === "absolute";
+  $("fMeanBox").hidden = $("fStdBox").hidden = !!abs;
+  if (c && !abs) { if (!$("fMean").value) $("fMean").value = c.mean; if (!$("fStd").value) $("fStd").value = c.std; }
+}
+$("fCourse").addEventListener("change", () => { $("fMean").value = ""; $("fStd").value = ""; fillFinalDefaults(); $("fResult").innerHTML = ""; });
+
+$("fBtn").addEventListener("click", async () => {
+  say("fMsg", "");
+  $("fResult").innerHTML = "";
+  if (!$("fCourse").value) { warn("fMsg", "현 학기 교과목을 먼저 등록해 주세요.", null); return; }
+  const abs = $("fMeanBox").hidden;
+  const prob = firstProblem([[$("fTotal"), "최종 총점"], ...(abs ? [] : [[$("fMean"), "수강생 평균"], [$("fStd"), "표준편차"]])]);
+  if (prob) { warn("fMsg", prob[1], prob[0]); return; }
+  try {
+    const r = await api("POST", "/api/final-estimate", { course_id: $("fCourse").value, final_total: $("fTotal").value, mean: $("fMean").value, std: $("fStd").value });
+    renderFinalResult(r);
+  } catch (err) { warnErr("fMsg", err, { "최종 총점": $("fTotal"), "수강생 평균": $("fMean"), "표준편차": $("fStd") }); }
+});
+
+function renderFinalResult(r) {
+  const out = $("fResult");
+  out.innerHTML = "";
+  out.append(el("div", { class: "sub-title" }, `${r.course.name} 예상 학점`,
+    r.top_percent === null ? el("span", { class: "wd-tag" }, "절대평가 기준") : el("span", { class: "wd-tag" }, `추정 상위 ${r.top_percent.toFixed(1)}%`)));
+  const lines = [];
+  if (r.up) lines.push(el("div", {}, el("b", {}, r.up.grade), ` 까지 ${r.up.gap}점 부족 (${r.up.need_score}점 이상 필요)`));
+  if (r.down) lines.push(el("div", {}, el("b", {}, r.down.grade), ` 로 내려가기까지 ${r.down.margin}점 여유`));
+  out.append(el("div", { class: "wd-two" },
+    el("div", { class: "wd-box" }, el("div", { class: "wd-bt" }, "가장 가능성 높은 학점"), el("div", { class: "wd-bn" }, r.grade),
+      el("div", { class: "wd-bd" }, `최종 총점 ${r.final_total}점`)),
+    el("div", { class: "wd-box" }, el("div", { class: "wd-bt" }, "학점 경계까지의 거리"), el("div", { class: "fin-lines" }, lines.length ? lines : "경계 정보가 없습니다."))));
+  // 구간 막대와 내 위치
+  const bands = r.bands.filter((b) => b.hi !== null && b.hi > (b.lo || 0) && (b.lo === null || b.lo < 100));
+  const lo0 = Math.min(...bands.map((b) => b.lo === null ? 0 : b.lo));
+  const span = 100 - lo0, pct = (v) => Math.max(0, Math.min(100, ((v - lo0) / span) * 100));
+  const bar = el("div", { class: "fin-bar" });
+  for (const b of bands) {
+    const lo = b.lo === null ? lo0 : b.lo;
+    const w = pct(b.hi) - pct(lo);
+    if (w <= 0) continue;
+    bar.append(el("i", { class: b.grade === r.grade ? "on" : "", style: `width:${w}%` }, w >= 5 ? b.grade : ""));
+  }
+  const wrap = el("div", { class: "fin-wrap" }, el("div", { class: "fin-pin", style: `left:${Math.max(6, Math.min(94, pct(r.final_total)))}%` }, `내 점수 ${r.final_total}점`), bar);
+  out.append(wrap);
+  if (r.near) out.append(el("div", { class: "wd-rec" }, "학점 경계에 가깝습니다.", el("small", {}, "경계까지 2점 이내라서, 교수님의 실제 학점 경계에 따라 한 단계 위나 아래가 될 수 있습니다.")));
+  const g = (v) => (v === null ? "-" : f2(v));
+  out.append(el("div", { class: "hint" }, `이 성적을 받으면 현 학기 평균 평점 ${g(r.semester_gpa)} · 누적 평균 평점 ${g(r.cumulative_gpa)} (다른 과목은 현재 점수 기준 예상 학점으로 계산, 목표 ${f2(r.target_gpa)})`));
+  out.append(el("div", { class: "hint" }, "예상은 확정 성적이 아닙니다. 학점이 확정되면 '내 성적'에서 '확정 성적 등록'으로 입력해 확정 값으로 바꾸세요."));
+  out.append(el("div", { class: "row" },
+    el("button", { type: "button", class: "btn-ghost", onclick: () => showTab("retake") }, "재수강 성적 개선 분석 보기"),
+    el("button", { type: "button", class: "btn-ghost", onclick: () => showTab("grades") }, "확정 성적 등록하러 가기")));
+}
+
+$("sExtraOn").addEventListener("change", () => {
+  if ($("sExtraOn").checked) { extraN = extraN || 1; $("sExtra").hidden = false; } else { extraN = 0; $("sExtra").hidden = true; }
+  semTouched = true; paintSem();
+});
+$("sExtra").addEventListener("click", (e) => { const b = e.target.closest("button"); if (b) { extraN = +b.dataset.v; semTouched = true; paintSem(); } });
+
+function semYearLabel(y) { return y > 4 ? "추가학기" : `${y}학년`; }
+function semLabel(y, t) { return y > 4 ? `추가 ${(y - 5) * 2 + t}학기` : `${y}학년 ${t}학기`; }
