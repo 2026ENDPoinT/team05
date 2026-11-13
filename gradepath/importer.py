@@ -4,6 +4,7 @@
 첫 줄(머리글)에 학기, 과목명, 학점, 구분, 필수, 성적 칸이 있어야 하고, 칸 이름은 아래 별칭도 알아봅니다.
 """
 import csv
+import functools
 import io
 
 from semester import normalize_semester
@@ -54,6 +55,7 @@ def template_csv():
     return "﻿" + buf.getvalue()     # 엑셀에서 한글이 깨지지 않도록 BOM 포함
 
 
+@functools.lru_cache(maxsize=1)
 def template_xlsx():
     """입력하기 쉬운 엑셀 양식: 안내 줄, 예시 줄(회색), 구분·필수·성적·학점 칸에 드롭다운/입력 제한."""
     from openpyxl import Workbook

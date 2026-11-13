@@ -205,6 +205,23 @@ def _write_user(conn, uid, data):
          for c in data["current"]])
 
 
+def set_mode(uid, mode):
+    """시점(중간고사 이후/기말고사 이후)만 바꿉니다. 사용자 데이터 전체를 다시 쓰지 않아 빠릅니다."""
+    if not valid_uid(uid):
+        raise ValueError("올바르지 않은 사용자 번호")
+    with _lock:
+        conn = _connect()
+        try:
+            with conn:
+                cur = conn.execute("UPDATE settings SET mode = ? WHERE uid = ?", (mode, uid))
+                if cur.rowcount == 0:                                   # 설정을 아직 저장한 적 없는 사용자
+                    data = _load(conn, uid)
+                    data["settings"]["mode"] = mode
+                    _write_user(conn, uid, data)
+        finally:
+            conn.close()
+
+
 def save(uid, data):
     if not valid_uid(uid):
         raise ValueError("올바르지 않은 사용자 번호")

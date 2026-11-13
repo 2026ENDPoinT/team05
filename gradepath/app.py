@@ -10,6 +10,7 @@ from flask import Flask, Response, g, jsonify, render_template, request
 
 import calc
 import os
+import threading
 import json
 import importer
 import storage
@@ -36,6 +37,17 @@ def static_version():
     return {"sv": v}
 app.config["MAX_CONTENT_LENGTH"] = 1024 * 1024   # 업로드 파일은 1MB까지
 storage.init()   # DB 파일·테이블 생성, 예전 JSON 데이터가 있으면 한 번만 이전
+
+
+def _warm_up():
+    """엑셀 라이브러리는 처음 불러올 때 느리므로, 서버가 켜질 때 미리 불러오고 양식 파일도 만들어 둡니다."""
+    try:
+        importer.template_xlsx()
+    except Exception:
+        pass
+
+
+threading.Thread(target=_warm_up, daemon=True).start()
 
 
 # ---------- 사용자 구분 (브라우저별 데이터) ----------
@@ -171,11 +183,16 @@ def need_upto(body, key, label, hi, lo=0.0):
 
 
 def parse_current(body):
-    fin_ratio = None                                  # 기말고사는 점수를 아직 모르므로 반영 비율과 만점만 받음
+    fin_ratio = None                                  # 기말고사 반영 비율과 만점 (점수는 기말고사 이후에만 입력)
     fin_max = 100.0
+    fin_score = None
     if body.get("fin_ratio") not in (None, ""):
         fin_ratio = need_float(body, "fin_ratio", "기말고사 반영 비율", 0.01, 100)
         fin_max = opt_max(body, "fin_max", "기말고사 만점")
+    if body.get("fin_score") not in (None, ""):
+        if fin_ratio is None:
+            raise BadInput("기말고사 점수: 기말고사 평가 비중을 함께 입력해 주세요.")
+        fin_score = need_upto(body, "fin_score", "기말고사 점수", fin_max)
     items = []
     raw_items = body.get("items") or []
     if not isinstance(raw_items, list) or len(raw_items) > 8:
@@ -202,6 +219,8 @@ def parse_current(body):
         extra["fin_ratio"] = fin_ratio
         if fin_max != 100.0:
             extra["fin_max"] = fin_max
+        if fin_score is not None:
+            extra["fin_score"] = fin_score * 100.0 / fin_max      # 계산은 모두 100점 만점 환산 값으로 저장
     if items:
         extra["items"] = items
     max_score = opt_max(body, "max_score", "중간고사 만점")
@@ -294,8 +313,8 @@ def put_settings():
     s["major_credits_required"] = need_int(body, "major_credits_required", "전공 졸업학점", 0, 200)
     s["max_credits_per_semester"] = need_int(body, "max_credits_per_semester", "학기당 최대 학점", 1, 40)
     s["max_credits_per_year"] = need_int(body, "max_credits_per_year", "학년도 최대 학점", 1, 80)
-    s["remaining_semesters"] = need_int(body, "remaining_semesters", "남은 학기 수", 0, 12)
-    s["extra_semesters"] = need_int(body, "extra_semesters", "추가 학기 수", 0, 4) if "extra_semesters" in body else 0
+    s["remaining_semesters"] = need_int(body, "remaining_semesters", "남은 학기 수", 0, 18)
+    s["extra_semesters"] = need_int(body, "extra_semesters", "추가 학기 수", 0, 10) if "extra_semesters" in body else 0
     if s["remaining_semesters"] < s["extra_semesters"]:
         raise BadInput("추가 학기 수: 남은 학기 수보다 클 수 없습니다.")
     s["seasonal_plan_credits"] = need_int(body, "seasonal_plan_credits", "계절학기 계획 학점", 0, 60)
@@ -310,9 +329,7 @@ def put_settings():
 @app.put("/api/mode")
 def put_mode():
     body = request.get_json(silent=True) or {}
-    data = load()
-    data["settings"]["mode"] = need_choice(body, "mode", "시점", MODE_LABELS)
-    save(data)
+    storage.set_mode(g.uid, need_choice(body, "mode", "시점", MODE_LABELS))      # 시점 한 칸만 바꿈 (전체 저장보다 빠름)
     return jsonify({"ok": True})
 
 
@@ -378,7 +395,8 @@ def import_template_xlsx():
     except ImportError:
         raise BadInput("서버에 openpyxl이 설치되어 있지 않습니다. CSV 양식을 받아 주세요.")
     return Response(data, mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                    headers={"Content-Disposition": "attachment; filename=polaris_template.xlsx"})
+                    headers={"Content-Disposition": "attachment; filename=polaris_template.xlsx",
+                             "Cache-Control": "public, max-age=3600"})
 
 
 @app.post("/api/import/preview")
@@ -553,14 +571,13 @@ def api_final_estimate():
     if not ids:
         raise BadInput("현 학기 교과목을 먼저 등록해 주세요.")
     cid = need_choice(body, "course_id", "과목", ids)
-    total = need_upto(body, "final_total", "최종 총점", 100.0)
     course = next(c for c in data["current"] if c["id"] == cid)
+    if course.get("fin_score") is None:
+        raise BadInput("이 과목은 기말고사 점수가 없습니다. 위 '현 학기 교과목 등록'에서 기말고사 점수를 입력해 주세요.")
+    total, mean, std = calc.eff_stats(course)      # 등록한 중간·기말·기타 항목 점수를 100점 환산해 합친 값
     if course["grading"] == "absolute":
         mean = std = 0.0
-    else:
-        mean = need_upto(body, "mean", "수강생 평균", 100.0)
-        std = need_upto(body, "std", "표준편차", 50.0, 0.01)
-    return jsonify(calc.final_estimate(data["completed"], data["current"], cid, data["settings"], total, mean, std))
+    return jsonify(calc.final_estimate(data["completed"], data["current"], cid, data["settings"], round(total, 2), mean, std))
 
 
 @app.post("/api/withdraw")
