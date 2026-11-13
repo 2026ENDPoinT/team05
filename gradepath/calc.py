@@ -400,6 +400,71 @@ def simulate_course_grades(done, current, course_id, settings):
     }
 
 
+def _z_for_top(top_pct):
+    """상위 top_pct% 에 해당하는 z점수 (이분법으로 구함)."""
+    lo, hi = -8.0, 8.0
+    for _ in range(80):
+        mid = (lo + hi) / 2
+        if top_percent(mid) > top_pct:
+            lo = mid
+        else:
+            hi = mid
+    return (lo + hi) / 2
+
+
+def final_estimate(done, current, course_id, settings, final_total, mean, std):
+    """기말고사 이후(성적 확정 전) 예상 학점: 기말까지 포함한 최종 총점으로 반 안의 위치를 구함.
+
+    절대평가는 총점 기준표로, 상대평가는 (총점-평균)/표준편차 → 상위 % → 누적 비율표로 학점을 정합니다.
+    학점 경계까지의 점수 거리(위로 얼마나 모자란지, 아래로 얼마나 여유 있는지)도 함께 돌려줍니다.
+    """
+    course = next(c for c in current if c["id"] == course_id)
+    mode = course["grading"]
+    absolute = mode == "absolute"
+    if absolute:
+        thr = {g: c for g, c in ABSOLUTE_CUTOFFS}
+        thr.setdefault("F", 0.0)
+        grade = grade_from_score(final_total)
+        top_pct = None
+    else:
+        cuts = relative_cutoffs(relaxed=(mode == "relative_relaxed"))
+        z = z_score(final_total, mean, std)
+        top_pct = top_percent(z)
+        grade = grade_from_top_percent(top_pct, cuts)
+        thr = {g: mean + _z_for_top(cuts[g]) * std for g in GRADE_ORDER if g in cuts}
+        thr["F"] = None
+    order = GRADE_ORDER + ["F"] if "F" not in GRADE_ORDER else list(GRADE_ORDER)
+    i = order.index(grade)
+    up = None
+    if i > 0:
+        need = thr[order[i - 1]]
+        up = {"grade": order[i - 1], "need_score": round(need, 1), "gap": round(max(0.0, need - final_total), 1)}
+    down = None
+    if i < len(order) - 1 and thr.get(grade) is not None:
+        down = {"grade": order[i + 1], "margin": round(max(0.0, final_total - thr[grade]), 1)}
+    near = (up is not None and up["gap"] <= 2.0) or (down is not None and down["margin"] <= 2.0)
+    bands = []
+    for k in range(len(order) - 1, -1, -1):          # 점수가 낮은 학점부터
+        g = order[k]
+        lo = thr.get(g)
+        hi = thr.get(order[k - 1]) if k > 0 else 100.0
+        bands.append({"grade": g, "lo": None if lo is None else round(max(0.0, lo), 1),
+                      "hi": None if hi is None else round(min(100.0, hi), 1)})
+    expected = {c["id"]: grade_at(c, 0.0) for c in current}
+    cur = [{"credit": c["credit"], "grade": grade if c["id"] == course_id else expected[c["id"]]} for c in current]
+    return {
+        "course": {"name": course["name"], "credit": course["credit"]},
+        "grade": grade,
+        "top_percent": top_pct,
+        "absolute": absolute,
+        "up": up, "down": down, "near": near, "bands": bands,
+        "final_total": final_total,
+        "semester_gpa": calc_gpa(cur),
+        "cumulative_gpa": calc_gpa(done + cur),
+        "target_gpa": settings["target_gpa"],
+    }
+
+
 # ------------------------------------------------------------------
 # 4. 졸업 부담 계산
 # ------------------------------------------------------------------
@@ -824,7 +889,7 @@ def life_guide(done, current, settings, busy=None):
     sem_left = settings["remaining_semesters"]
     cap = min(settings["max_credits_per_semester"], settings.get("max_credits_per_year", 37) / 2)
 
-    idx = max(1, 8 - sem_left)                    # 이번 학기 번호
+    idx = max(1, 8 + settings.get("extra_semesters", 0) - sem_left)   # 이번 학기 번호 (추가 학기는 8학기 뒤에 이어 붙음)
     remaining_total = max(0, total_req - earned - cur_cr)
     seasonal = min(max(0, settings["seasonal_plan_credits"]), remaining_total)
     need_regular = remaining_total - seasonal

@@ -38,6 +38,7 @@ CREATE TABLE IF NOT EXISTS settings (
     max_credits_per_semester INTEGER NOT NULL,
     max_credits_per_year     INTEGER NOT NULL DEFAULT 37,
     remaining_semesters      INTEGER NOT NULL,
+    extra_semesters          INTEGER NOT NULL DEFAULT 0,
     seasonal_plan_credits    INTEGER NOT NULL,
     target_gpa               REAL    NOT NULL,
     mode                     TEXT    NOT NULL,
@@ -303,6 +304,8 @@ def init():
                 for k, typ in ALTER_COLUMNS.items():
                     if k not in ccols:
                         conn.execute(f"ALTER TABLE current_courses ADD COLUMN {k} {typ}")
+                if "extra_semesters" not in cols:
+                    conn.execute("ALTER TABLE settings ADD COLUMN extra_semesters INTEGER NOT NULL DEFAULT 0")
                 if "max_credits_per_year" not in cols:
                     conn.execute("ALTER TABLE settings ADD COLUMN max_credits_per_year INTEGER NOT NULL DEFAULT 37")
         finally:

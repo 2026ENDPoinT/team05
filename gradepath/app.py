@@ -295,6 +295,9 @@ def put_settings():
     s["max_credits_per_semester"] = need_int(body, "max_credits_per_semester", "학기당 최대 학점", 1, 40)
     s["max_credits_per_year"] = need_int(body, "max_credits_per_year", "학년도 최대 학점", 1, 80)
     s["remaining_semesters"] = need_int(body, "remaining_semesters", "남은 학기 수", 0, 12)
+    s["extra_semesters"] = need_int(body, "extra_semesters", "추가 학기 수", 0, 4) if "extra_semesters" in body else 0
+    if s["remaining_semesters"] < s["extra_semesters"]:
+        raise BadInput("추가 학기 수: 남은 학기 수보다 클 수 없습니다.")
     s["seasonal_plan_credits"] = need_int(body, "seasonal_plan_credits", "계절학기 계획 학점", 0, 60)
     s["target_gpa"] = need_float(body, "target_gpa", "목표 평균 학점", 0, 4.5)
     s["retake_cap"] = need_choice(body, "retake_cap", "재수강 최고 성적", GRADE_POINTS)
@@ -539,6 +542,25 @@ def api_simulate():
         raise BadInput("이번 학기 과목을 먼저 입력해 주세요.")
     cid = need_choice(body, "course_id", "과목", ids)
     return jsonify(calc.simulate_course_grades(data["completed"], data["current"], cid, data["settings"]))
+
+
+@app.post("/api/final-estimate")
+def api_final_estimate():
+    """기말고사 이후(성적 확정 전): 최종 총점으로 예상 학점과 학점 경계까지의 거리"""
+    body = request.get_json(silent=True) or {}
+    data = load()
+    ids = [c["id"] for c in data["current"]]
+    if not ids:
+        raise BadInput("현 학기 교과목을 먼저 등록해 주세요.")
+    cid = need_choice(body, "course_id", "과목", ids)
+    total = need_upto(body, "final_total", "최종 총점", 100.0)
+    course = next(c for c in data["current"] if c["id"] == cid)
+    if course["grading"] == "absolute":
+        mean = std = 0.0
+    else:
+        mean = need_upto(body, "mean", "수강생 평균", 100.0)
+        std = need_upto(body, "std", "표준편차", 50.0, 0.01)
+    return jsonify(calc.final_estimate(data["completed"], data["current"], cid, data["settings"], total, mean, std))
 
 
 @app.post("/api/withdraw")

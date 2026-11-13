@@ -113,6 +113,7 @@ DEFAULT_SETTINGS = {
     "max_credits_per_semester": 19,  # [학칙 확인됨] 매학기 최대 신청 학점 (2017학번 이후 입학, 2016학번 이전은 21)
     "max_credits_per_year": 37,      # [학칙 확인됨] 매학년도 최대 신청 학점 (2017학번 이후 입학, 2016학번 이전은 40)
     "remaining_semesters": 7,        # 이번 학기 이후 남은 정규 학기 수
+    "extra_semesters": 0,            # 8학기 이후에도 더 다닐 추가 학기 수 (remaining_semesters에 포함됨)
     "seasonal_plan_credits": 0,      # 졸업 전까지 계절학기로 들을 계획인 학점 (사용자가 직접 입력)
     "target_gpa": 3.5,               # 목표 누적 평균 학점
     "mode": "mid",                   # 사용 시점: mid(중간고사 이후) / final(기말고사 이후)
