@@ -10,7 +10,6 @@ from flask import Flask, Response, g, jsonify, render_template, request
 
 import calc
 import os
-import threading
 import json
 import importer
 import storage
@@ -39,15 +38,10 @@ app.config["MAX_CONTENT_LENGTH"] = 1024 * 1024   # 업로드 파일은 1MB까지
 storage.init()   # DB 파일·테이블 생성, 예전 JSON 데이터가 있으면 한 번만 이전
 
 
-def _warm_up():
-    """엑셀 라이브러리는 처음 불러올 때 느리므로, 서버가 켜질 때 미리 불러오고 양식 파일도 만들어 둡니다."""
-    try:
-        importer.template_xlsx()
-    except Exception:
-        pass
-
-
-threading.Thread(target=_warm_up, daemon=True).start()
+try:                      # 엑셀 라이브러리는 처음 불러올 때 느리므로 서버가 켜질 때 미리 불러오고 양식 파일도 만들어 둠 (요청과 겹치지 않게 시작 시점에 한 번만)
+    importer.template_xlsx()
+except Exception:
+    pass
 
 
 # ---------- 사용자 구분 (브라우저별 데이터) ----------
