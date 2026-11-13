@@ -142,6 +142,7 @@
               <label>중간고사 평가 비중(%)<input type="text" inputmode="decimal" data-num id="uExamRatio" step="0.01" min="0.01" max="100" placeholder="예: 30"></label>
               <label>기말고사 평가 비중(%)<input type="text" inputmode="decimal" data-num id="uFinRatio" step="0.01" min="0.01" max="100" placeholder="예: 40 (점수는 몰라도 됨)"></label>
               <label>기말고사 시험 만점<input type="text" inputmode="decimal" data-num id="uFinMax" step="0.01" min="0" placeholder="비우면 100"></label>
+              <label>기말고사 점수<input type="text" inputmode="decimal" data-num id="uFinScore" step="0.01" min="0" placeholder="기말고사 이후에 입력" disabled></label>
             </div>
             <div class="item-list" id="uItems"></div>
             <div class="row">
@@ -168,15 +169,9 @@
     </section>
     <section id="finalSec" hidden>
       <div class="section-title">기말고사 성적으로 예상 학점 보기 <span class="wd-tag">성적 확정 전 · 예상</span></div>
-      <p class="hint">기말고사까지 포함한 최종 총점(100점 환산)과 수강생 평균·표준편차를 입력하면, 반 안에서의 위치로 예상 학점을 알려 드립니다. 절대평가 과목은 총점만 입력하면 됩니다. 확정 성적이 아닌 예상이며, 학점 경계는 교수님 기준에 따라 달라질 수 있습니다.</p>
-      <div class="row"><select id="fCourse" class="grow" aria-label="교과목 선택"></select></div>
-      <div class="grid-form" id="fForm">
-        <label class="f s3">최종 총점<input type="text" inputmode="decimal" data-num id="fTotal" step="0.01" min="0" max="100" placeholder="예: 86.5"></label>
-        <label class="f s3" id="fMeanBox">수강생 평균<input type="text" inputmode="decimal" data-num id="fMean" step="0.01" min="0" max="100" placeholder="예: 71.2"></label>
-        <label class="f s3" id="fStdBox">표준편차<input type="text" inputmode="decimal" data-num id="fStd" step="0.01" min="0.01" max="50" placeholder="예: 11.8"></label>
-        <span class="f-actions"><button class="btn" type="button" id="fBtn">예상 학점 보기</button></span>
-      </div>
-      <p class="hint" id="fHint">평균·표준편차는 중간고사 때 입력한 값을 채워 두었습니다. 기말까지 포함한 값을 알면 바꿔 주세요.</p>
+      <p class="hint">위 '현 학기 교과목 등록'에서 평가 항목별 반영 비율을 적용하고 기말고사 점수를 입력해 두면, 중간고사·기말고사·기타 항목 점수를 합산한 총점과 수강생 평균·표준편차로 반 안에서의 위치를 구해 예상 학점을 알려 드립니다. 확정 성적이 아닌 예상이며, 학점 경계는 교수님 기준에 따라 달라질 수 있습니다.</p>
+      <div class="row"><select id="fCourse" class="grow" aria-label="교과목 선택"></select>
+        <button class="btn" type="button" id="fBtn">예상 학점 보기</button></div>
       <div class="msg" id="fMsg"></div>
       <div id="fResult"></div>
     </section>
@@ -269,13 +264,12 @@
           <div class="seg-row">
             <div class="seg" id="sYear" role="group" aria-label="학년"><button type="button" data-v="1">1학년</button><button type="button" data-v="2">2학년</button><button type="button" data-v="3">3학년</button><button type="button" data-v="4">4학년</button></div>
             <div class="seg" id="sTerm" role="group" aria-label="학기"><button type="button" data-v="1">1학기</button><button type="button" data-v="2">2학기</button></div>
+            <div class="extra-inline">
+              <label class="check"><input type="checkbox" id="sExtraOn"> 추가학기</label>
+              <select id="sExtra" aria-label="추가 학기 수" hidden></select>
+            </div>
           </div>
           <small class="fnote" id="sSemNote"></small>
-        </div>
-        <div class="field full">
-          <label class="check"><input type="checkbox" id="sExtraOn"> 추가학기 (8학기 이후에도 수강)</label>
-          <div class="seg" id="sExtra" role="group" aria-label="추가 학기 수" hidden><button type="button" data-v="1">1학기</button><button type="button" data-v="2">2학기</button><button type="button" data-v="3">3학기</button><button type="button" data-v="4">4학기</button></div>
-          <small class="fnote" id="sExtraNote">켜고 학기 수를 고르면 졸업까지 남은 정규 학기가 그만큼 늘어납니다.</small>
         </div>
         <p class="hint full">대학교·학과·입학년도는 향후 학칙 자동 적용을 위한 입력 항목입니다. 지금은 계산에 쓰이지 않으므로 졸업 학점과 재수강 규정은 아래 '고급 학사 설정'에서 직접 확인하세요.</p>
 
